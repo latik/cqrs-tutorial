@@ -68,7 +68,7 @@ $> laravel new cqrs-tutorial
 And the first thing we need is a test. We're just going to stick with an integration test to assert that booking a
 lesson for a client results in that lesson being created in our Eloquent model.
 
-```
+```php
 <?php
 
 use Illuminate\Foundation\Bus\DispatchesCommands;
@@ -114,10 +114,10 @@ Finally, we have to create a migration for the lessons table.
 I'm using an assertion library to keep the code clean. You can grab it with:
 
 ```
-$> composer require beberlei/assert
+composer require beberlei/assert
 ```
 
-```
+```php
 <?php
 namespace App\School\Lesson;
 
@@ -144,7 +144,7 @@ class LessonId {
 }
 ```
 
-```
+```php
 <?php
 namespace App\School\Lesson\Commands;
 
@@ -178,7 +178,7 @@ class BookLesson extends Command implements SelfHandling {
  }
 ```
 
-```
+```php
 <?php
 namespace App\School\ReadModels;
 
@@ -189,7 +189,7 @@ class Lesson extends Model {
 }
 ```
 
-```
+```php
 <?php
 
 use Illuminate\Database\Schema\Blueprint;
@@ -249,7 +249,7 @@ be used later when we need to replay old events to build up the write model's st
 It's a tricky concept to explain so here is some code to help outline the process. Later, we will extract out the code
 handling uncommittedEvents and domain event message creation.
 
-```
+```php
 <?php
 
 namespace App\School\Lesson;
@@ -311,7 +311,7 @@ list.
 The extracted class is an implementation detail of CQRS, and doesn't contain any domain logic so we can create a new
 namespace: App\CQRS:
 
-```
+```php
 <?php
 namespace App\CQRS;
 
@@ -351,7 +351,7 @@ abstract class EventSourcedEntity implements EventSourcedEntityInterface {
 
 To get the code to run, we need to add a DomainEventMessage class, which is just a simple DTO:
 
-```
+```php
 <?php
 namespace App\CQRS;
 
@@ -448,7 +448,7 @@ type hinting :)
 
 Update our LessonWasOpened event:
 
-```
+```php
 class LessonWasOpened implements SerializableEvent {
 
     public function serialize() {
@@ -459,7 +459,7 @@ class LessonWasOpened implements SerializableEvent {
 
 Create the LessonRepository. We can refactor and extract generic CQRS stuff later.
 
-```
+```php
 <?php
 namespace App\School\Lesson;
 
@@ -500,7 +500,7 @@ projection.
 The broadcasted Lesson events will be caught by a LessonProjector, which applies the neccessary changes to a
 LessonProjection (just an Eloquent model of the lessons table):
 
-```
+```php
 <?php
 namespace App\School\Lesson\Projections;
 
@@ -540,7 +540,7 @@ class LessonProjector {
 }
 ```
 
-```
+```php
 <?php
 namespace App\School\Lesson\Projections;
 
@@ -555,7 +555,7 @@ class LessonProjection extends Model {
 And obviously, don't forget to register the event subscriber with laravel:
 :
 
-```
+```php
 public function boot(DispatcherContract $events)
 {
     parent::boot($events);
@@ -582,7 +582,7 @@ ClientProjector which catches the ClientBookedOntoLesson event.
 
 First, let's update our test to reflect the changes we want to see in our read model:
 
-```
+```php
 public function testFiringEventUpdatesReadModel()
 {
     $testLessonId = '123e4567-e89b-12d3-a456-426655440000';
@@ -615,7 +615,7 @@ we could just create a second ClientWasAddedToLesson event but we wouldn't be ab
 
 To explain what I mean, let's write a second test simulating booking two clients into a lesson.
 
-```
+```php
 public function testLoadingWriteModel()
 {
     $testLessonId = '123e4567-e89b-12d3-a456-426655440001';
@@ -657,7 +657,7 @@ The basic process is:
 At the moment, our tests throws exceptions so we start by creating the required BookClientOntoLesson command, using
 the BookLesson command as a template. The handle method will look like:
 
-```
+```php
 public function handle(LessonRepository $repository) {
     /** @var Lesson $lesson */
     $lesson = $repository->load($this->lessonId);
@@ -668,7 +668,7 @@ public function handle(LessonRepository $repository) {
 
 Add the load event in the lesson repository:
 
-```
+```php
 public function load(LessonId $id) {
     $events = $this->eventStoreRepository->load($id);
     $lesson = new Lesson();
@@ -689,7 +689,7 @@ Let's take a look at the code to explain things better.
 
 First the EventStoreRepository's load function:
 
-```
+```php
 public function load($uuid) {
     $eventMessages = EloquentEventStoreModel::where('uuid', $uuid)->get();
     $events = [];
@@ -707,7 +707,7 @@ public function load($uuid) {
 
 With the corresponding deserialize function in the eventSerializer:
 
-```
+```php
 public function deserialize( $serializedEvent ) {
     $eventClass = $serializedEvent->class;
     $eventPayload = $serializedEvent->payload;
@@ -718,7 +718,7 @@ public function deserialize( $serializedEvent ) {
 
 Finally, the static factory deserialize() method in LessonWasOpened (we need to add this method to every event)
 
-```
+```php
 public static function deserialize($data) {
     $lessonId = new LessonId($data->lessonId);
     return new self($lessonId);
@@ -727,7 +727,7 @@ public static function deserialize($data) {
 
 Now we have an array of all previous events, we just replay them against our Entity write model to initialize state:
 
-```
+```php
 public function initializeState($events) {
     foreach( $events as $event ) {
     $this->handle($event);
@@ -741,7 +741,7 @@ And rerun our test - we're back to Green!
 
 We don't actually have a test here to ensure we're enforcing our domain rules, so let's write one:
 
-```
+```php
 public function testMoreThan3ClientsCannotbeAddedToALesson() {
     $testLessonId = '123e4567-e89b-12d3-a456-426655440002';
     $lessonId = new LessonId($testLessonId);
@@ -761,12 +761,13 @@ You'll notice that we only need a lessonId - this test re-initializing the lesso
 At the moment, we're just passing in hand crafted UUIDs when really we want to generate these automatically. I'm going
 to use the Ramsy\UUID package, so let's install that with composer:
 
-<blockquote><code class="hljs">$> composer require ramsey/uuid
-</code></blockquote>
+```
+composer require ramsey/uuid
+```
 
 And update our tests to use the new package:
 
-```
+```php
 public function testEntityCreationWithUUIDGenerator() {
     $lessonId = new LessonId( (string) \Rhumsaa\Uuid\Uuid::uuid1() );
     $this->dispatch( new BookLesson($lessonId, "bob") );
@@ -780,7 +781,7 @@ Currently, a new developer to a project could look at the code, see App\School\R
 Eloquent models and use these models to write changes to the lessons table. We can stop this by creating an
 ImmutableModel class which extends the Eloquent Model class and overrides the save method:
 
-```
+```php
 <?php
 namespace App\CQRS\ReadModel;
 
